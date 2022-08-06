@@ -1,9 +1,10 @@
 use std::env;
 use std::error::Error;
+use std::ffi::{CStr, CString};
 
-use hidapi::HidApi;
+use hidapi::{HidApi, DeviceInfo};
 use mpris::{Metadata, PlayerFinder};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 struct HIDSongMetadata {
@@ -36,20 +37,26 @@ impl From<mpris::Metadata> for HIDSongMetadata {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let device_vendor_id: u16 = env::var("DEVICE_VENDOR_ID")
-        .expect("Missing required env var")
-        .parse()
-        .expect("Could not parse vendor ID");
-    let device_product_id: u16 = env::var("DEVICE_PRODUCT_ID")
-        .expect("Missing required env var")
-        .parse()
-        .expect("Could not parse product ID");
+    //let device_vendor_id: u16 = env::var("DEVICE_VENDOR_ID")
+    //.expect("Missing required env var")
+    //.parse()
+    //.expect("Could not parse vendor ID");
+    //let device_product_id: u16 = env::var("DEVICE_PRODUCT_ID")
+    //.expect("Missing required env var")
+    //.parse()
+    //.expect("Could not parse product ID");
+    let device_path = CString::new(env::var("DEVICE_PATH").expect("Missing required env var")).unwrap();
 
+    let hid_api = HidApi::new().unwrap();
     loop {
-        let metadata = get_current_metadata()?;
-        let hid_api = HidApi::new()?;
-        let device = hid_api.open(device_vendor_id, device_product_id)?;
-        device.write(&bincode::serialize(&metadata)?)?;
+        // let metadata = get_current_metadata()?;
+        // println!("{:#?}", hid_api.device_list().collect::<Vec<&DeviceInfo>>());
+        let device = hid_api.open_path(&CString::new("/dev/hidraw2").unwrap()).unwrap();
+        //println!("{:?}", device_info.path());
+        //let device = device_info.open_device(&hid_api).unwrap();
+        device.write("hi\n".as_bytes()).unwrap();
+        std::thread::sleep_ms(1000);
+
     }
 }
 

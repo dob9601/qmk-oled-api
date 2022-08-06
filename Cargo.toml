@@ -7,6 +7,6 @@ edition = "2021"
 
 [dependencies]
 mpris = "2.0.0-rc2"
-hidapi = "1.4.1"
+hidapi = { version = "1.4.1", default-features = false, features = ["linux-static-hidraw"]}
 bincode = "1.3.3"
 serde = { version = "1.0.141", features = ["derive"] }
