@@ -51,7 +51,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     loop {
         // let metadata = get_current_metadata()?;
         // println!("{:#?}", hid_api.device_list().collect::<Vec<&DeviceInfo>>());
-        let device = hid_api.open_path(&CString::new("/dev/hidraw2").unwrap()).unwrap();
+        let device = hid_api.open_path(&device_path).unwrap();
         //println!("{:?}", device_info.path());
         //let device = device_info.open_device(&hid_api).unwrap();
         device.write("hi\n".as_bytes()).unwrap();
