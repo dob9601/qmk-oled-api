@@ -1,9 +1,11 @@
 use std::env;
 use std::error::Error;
 use std::ffi::{CStr, CString};
+use std::time::Duration;
 
-use hidapi::{HidApi, DeviceInfo};
+use hidapi::{DeviceInfo, HidApi};
 use mpris::{Metadata, PlayerFinder};
+use qmk_nowplaying::data::OledScreen32x128;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -37,26 +39,20 @@ impl From<mpris::Metadata> for HIDSongMetadata {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    //let device_vendor_id: u16 = env::var("DEVICE_VENDOR_ID")
-    //.expect("Missing required env var")
-    //.parse()
-    //.expect("Could not parse vendor ID");
-    //let device_product_id: u16 = env::var("DEVICE_PRODUCT_ID")
-    //.expect("Missing required env var")
-    //.parse()
-    //.expect("Could not parse product ID");
-    let device_path = CString::new(env::var("DEVICE_PATH").expect("Missing required env var")).unwrap();
+    let device_path =
+        CString::new(env::var("DEVICE_PATH").expect("Missing required env var")).unwrap();
+
+    let mut screen = OledScreen32x128::new();
+    for i in 0..128 {
+        screen.set_pixel(0, i, true);
+        screen.set_pixel(31, i, true);
+    }
 
     let hid_api = HidApi::new().unwrap();
     loop {
-        // let metadata = get_current_metadata()?;
-        // println!("{:#?}", hid_api.device_list().collect::<Vec<&DeviceInfo>>());
         let device = hid_api.open_path(&device_path).unwrap();
-        //println!("{:?}", device_info.path());
-        //let device = device_info.open_device(&hid_api).unwrap();
-        device.write("hi\n".as_bytes()).unwrap();
-        std::thread::sleep_ms(1000);
-
+        screen.send(&device)?;
+        std::thread::sleep(Duration::from_millis(1000));
     }
 }
 
