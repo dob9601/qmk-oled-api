@@ -42,15 +42,21 @@ fn main() -> Result<(), Box<dyn Error>> {
     let device_path =
         CString::new(env::var("DEVICE_PATH").expect("Missing required env var")).unwrap();
 
-    let mut screen = OledScreen32x128::new();
-    for i in 0..128 {
-        screen.set_pixel(0, i, true);
-        screen.set_pixel(31, i, true);
-    }
+    let mut row = 0;
 
     let hid_api = HidApi::new().unwrap();
+    let device = hid_api.open_path(&device_path).unwrap();
     loop {
-        let device = hid_api.open_path(&device_path).unwrap();
+        let mut screen = OledScreen32x128::new();
+        for i in 0..128 {
+            screen.set_pixel(row, i, true);
+            screen.set_pixel(row, i, true);
+            screen.set_pixel(row, i, true);
+        }
+
+        row += 1;
+        if row == 32 { row = 0 }
+
         screen.send(&device)?;
         std::thread::sleep(Duration::from_millis(1000));
     }

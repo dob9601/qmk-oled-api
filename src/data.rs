@@ -3,6 +3,8 @@ use std::fmt::Display;
 use hidapi::{HidDevice, HidError};
 use itertools::Itertools;
 
+const PAYLOAD_SIZE: usize = 32;
+
 fn set_bit_at_index(byte: u8, bit_index: u8, enabled: bool) -> u8 {
     let mask = 0b10000000 >> bit_index;
 
@@ -14,7 +16,7 @@ fn set_bit_at_index(byte: u8, bit_index: u8, enabled: bool) -> u8 {
 }
 
 pub struct OledScreen32x128 {
-    data: [[u8; 4]; 128],
+    data: [[u8; 128]; 4],
 }
 
 impl Display for OledScreen32x128 {
@@ -33,7 +35,7 @@ impl Display for OledScreen32x128 {
 impl OledScreen32x128 {
     pub fn new() -> Self {
         Self {
-            data: [[0; 4]; 128],
+            data: [[0; 128]; 4],
         }
     }
 
@@ -41,20 +43,18 @@ impl OledScreen32x128 {
         self.data
             .iter()
             .flatten()
-            .chunks(3)
+            .chunks(PAYLOAD_SIZE - 2)
             .into_iter()
             .map(|chunk| {
-                let bytes: Vec<&u8> = chunk.take(3).collect();
-                (
-                    **bytes.get(0).unwrap_or(&&0),
-                    **bytes.get(1).unwrap_or(&&0),
-                    **bytes.get(2).unwrap_or(&&0),
-                )
+                let mut output_array: [u8; PAYLOAD_SIZE - 2] = [0; PAYLOAD_SIZE - 2];
+                chunk
+                    .take(PAYLOAD_SIZE - 2)
+                    .enumerate()
+                    .for_each(|(index, byte)| output_array[index] = *byte);
+                output_array
             })
             .enumerate()
-            .map(|(index, chunk)| {
-                DataPacket::new(index.try_into().unwrap(), (chunk.0, chunk.1, chunk.2))
-            })
+            .map(|(index, chunk)| DataPacket::new(index.try_into().unwrap(), chunk))
             .collect()
     }
 
@@ -70,10 +70,10 @@ impl OledScreen32x128 {
 
     pub fn set_pixel(&mut self, x: usize, y: usize, enabled: bool) {
         let target_byte = x / 8;
-        let target_bit = (x % 8).try_into().unwrap();
+        let target_bit: u8 = 7 - ((x % 8) as u8);
 
-        self.data[y][target_byte] =
-            set_bit_at_index(self.data[y][target_byte], target_bit, enabled);
+        self.data[target_byte][y] =
+            set_bit_at_index(self.data[target_byte][y], target_bit, enabled);
     }
 }
 
@@ -85,12 +85,14 @@ impl Default for OledScreen32x128 {
 
 pub struct DataPacket {
     index: u8,
-    payload: (u8, u8, u8),
+    payload: [u8; PAYLOAD_SIZE - 2],
 }
 
 impl DataPacket {
     pub fn to_bytes(&self) -> Vec<u8> {
-        vec![self.index, self.payload.0, self.payload.1, self.payload.2]
+        let mut bytes = vec![1, self.index];
+        bytes.extend_from_slice(&self.payload);
+        bytes
     }
 
     pub fn send(&self, device: &HidDevice) -> Result<(), HidError> {
@@ -101,10 +103,10 @@ impl DataPacket {
         Ok(())
     }
 
-    pub fn new(starting_index: u8, payload: (u8, u8, u8)) -> Self {
+    pub fn new(starting_index: u8, payload: [u8; PAYLOAD_SIZE - 2]) -> Self {
         Self {
             index: starting_index,
-            payload: (payload.0, payload.1, payload.2),
+            payload,
         }
     }
 }
