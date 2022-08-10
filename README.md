@@ -1,6 +1,6 @@
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/A0A1EB7YD)
 
-# QMK Oled API
+# ![QMK Oled API](https://user-images.githubusercontent.com/24723950/183790643-aa12642c-0f83-4545-844e-621f3601720d.png)
 
 Drawing graphics on a QMK Oled screen is harder than it should be! This project hopes to resolve that.
 
