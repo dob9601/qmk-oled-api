@@ -1,6 +1,9 @@
+use std::cmp::min;
 use std::fmt::Display;
+use std::path::Path;
 
 use hidapi::{HidDevice, HidError};
+use image::imageops::{dither, BiLevel};
 use itertools::Itertools;
 
 const PAYLOAD_SIZE: usize = 32;
@@ -58,6 +61,24 @@ impl OledScreen32x128 {
             .collect()
     }
 
+    pub fn draw_image<P: AsRef<Path>>(&mut self, bitmap_file: P, x: usize, y: usize) {
+        let image = image::open(bitmap_file).unwrap();
+        let mut image = image.grayscale();
+        let image = image.as_mut_luma8().unwrap();
+        dither(image, &BiLevel);
+
+        let image_width = image.width();
+
+        for (index, pixel) in image.pixels().enumerate() {
+            let row = index / image_width as usize;
+            let col = index % image_width as usize;
+
+            let enabled = pixel.0[0] == 255;
+
+            self.set_pixel(x + row, y + col, enabled)
+        }
+    }
+
     pub fn send(&self, device: &HidDevice) -> Result<(), HidError> {
         let packets = self.to_packets();
 
@@ -85,6 +106,9 @@ impl OledScreen32x128 {
     }
 
     pub fn set_pixel(&mut self, x: usize, y: usize, enabled: bool) {
+        let x = min(31, x);
+        let y = min(127, y);
+
         let target_byte = x / 8;
         let target_bit: u8 = 7 - ((x % 8) as u8);
 
@@ -161,5 +185,11 @@ mod tests {
     fn test_to_packets() {
         let screen = OledScreen32x128::new();
         screen.to_packets();
+    }
+
+    #[test]
+    fn test_draw_image() {
+        let mut screen = OledScreen32x128::new();
+        screen.draw_image("/home/dob9601/repos/qmk_nowplaying/w3c_home.bmp", 0, 0)
     }
 }

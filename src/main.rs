@@ -48,17 +48,18 @@ fn main() -> Result<(), Box<dyn Error>> {
     let device = hid_api.open_path(&device_path).unwrap();
     loop {
         let mut screen = OledScreen32x128::new();
-        for i in 0..128 {
-            screen.set_pixel(row, i, true);
-            screen.set_pixel(row, i, true);
-            screen.set_pixel(row, i, true);
-        }
+        screen.draw_image("/home/dob9601/repos/qmk_nowplaying/w3c_home.bmp", 0, 0);
+        //for i in 0..128 {
+            //screen.set_pixel(row, i, true);
+            //screen.set_pixel(row, i, true);
+            //screen.set_pixel(row, i, true);
+        //}
 
-        row += 1;
-        if row == 32 { row = 0 }
+        //row += 1;
+        //if row == 32 { row = 0 }
 
         screen.send(&device)?;
-        std::thread::sleep(Duration::from_millis(1000));
+        std::thread::sleep(Duration::from_millis(200));
     }
 }
 
