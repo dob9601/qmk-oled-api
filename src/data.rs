@@ -68,6 +68,22 @@ impl OledScreen32x128 {
         Ok(())
     }
 
+    pub fn clear(&mut self) {
+        self.data = [[0; 128]; 4];
+    }
+
+    pub fn fill_all(&mut self) {
+        self.data = [[1; 128]; 4];
+    }
+
+    pub fn paint_region(&mut self, min_x: usize, min_y: usize, max_x: usize, max_y: usize, enabled: bool) {
+        for x in min_x..max_x {
+            for y in min_y..max_y {
+                self.set_pixel(x, y, enabled)
+            }
+        }
+    }
+
     pub fn set_pixel(&mut self, x: usize, y: usize, enabled: bool) {
         let target_byte = x / 8;
         let target_bit: u8 = 7 - ((x % 8) as u8);
