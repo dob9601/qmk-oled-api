@@ -48,15 +48,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     let device = hid_api.open_path(&device_path).unwrap();
     loop {
         let mut screen = OledScreen32x128::new();
-        screen.draw_image("/home/dob9601/repos/qmk_nowplaying/w3c_home.bmp", 0, 0);
+        screen.draw_text("/home/dob9601/Downloads/Minecraft.ttf", "yeet", 0, 0, 14.0);
         //for i in 0..128 {
-            //screen.set_pixel(row, i, true);
-            //screen.set_pixel(row, i, true);
-            //screen.set_pixel(row, i, true);
+            //screen.draw_pixel(row, i, true);
         //}
 
-        //row += 1;
-        //if row == 32 { row = 0 }
+        row += 1;
+        if row == 32 { row = 0 }
 
         screen.send(&device)?;
         std::thread::sleep(Duration::from_millis(200));

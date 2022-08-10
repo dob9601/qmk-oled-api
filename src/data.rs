@@ -1,7 +1,9 @@
 use std::cmp::min;
 use std::fmt::Display;
+use std::fs;
 use std::path::Path;
 
+use fontdue::Font;
 use hidapi::{HidDevice, HidError};
 use image::imageops::{dither, BiLevel};
 use itertools::Itertools;
@@ -75,7 +77,35 @@ impl OledScreen32x128 {
 
             let enabled = pixel.0[0] == 255;
 
-            self.set_pixel(x + row, y + col, enabled)
+            self.draw_pixel(x + row, y + col, enabled)
+        }
+    }
+
+    pub fn draw_text<P: AsRef<Path>>(&mut self, font_path: P, text: &str, x: usize, y: usize, size: f32) {
+        let font_bytes = fs::read(&font_path).unwrap();
+        let font = Font::from_bytes(font_bytes, fontdue::FontSettings::default()).unwrap();
+
+        let mut x_cursor = x;
+
+        for letter in text.chars() {
+            let width = font.metrics(letter, size).width;
+            self.draw_letter(&font_path, letter, x_cursor, y, size);
+
+            // FIXME: Use horizontal kerning as opposed to abstract value of "2"
+            x_cursor += width + 2
+        }
+    }
+
+    pub fn draw_letter<P: AsRef<Path>>(&mut self, font_path: P, letter: char, x: usize, y: usize, size: f32) {
+        let font_bytes = fs::read(font_path).unwrap();
+        let font = Font::from_bytes(font_bytes, fontdue::FontSettings::default()).unwrap();
+        let (metrics, bitmap) = font.rasterize(letter, size);
+
+        for (index, byte) in bitmap.into_iter().enumerate() {
+            let col = x + (index % metrics.width);
+            let row = y + metrics.height - (index / metrics.width);
+            let enabled = (byte as f32 / 255.0).round() as i32 == 1;
+            self.draw_pixel(col, row, enabled)
         }
     }
 
@@ -100,14 +130,16 @@ impl OledScreen32x128 {
     pub fn paint_region(&mut self, min_x: usize, min_y: usize, max_x: usize, max_y: usize, enabled: bool) {
         for x in min_x..max_x {
             for y in min_y..max_y {
-                self.set_pixel(x, y, enabled)
+                self.draw_pixel(x, y, enabled)
             }
         }
     }
 
-    pub fn set_pixel(&mut self, x: usize, y: usize, enabled: bool) {
-        let x = min(31, x);
-        let y = min(127, y);
+    pub fn draw_pixel(&mut self, x: usize, y: usize, enabled: bool) {
+        if x > 31 || y > 127 {
+            // If a pixel is rendered outside of the canvas, fail silently
+            return
+        }
 
         let target_byte = x / 8;
         let target_bit: u8 = 7 - ((x % 8) as u8);
@@ -175,8 +207,8 @@ mod tests {
     fn test_display_oled_screen() {
         let mut screen = OledScreen32x128::new();
         for i in 0..128 {
-            screen.set_pixel(0, i, true);
-            screen.set_pixel(31, i, true);
+            screen.draw_pixel(0, i, true);
+            screen.draw_pixel(31, i, true);
         }
         println!("{screen}");
     }
@@ -191,5 +223,11 @@ mod tests {
     fn test_draw_image() {
         let mut screen = OledScreen32x128::new();
         screen.draw_image("/home/dob9601/repos/qmk_nowplaying/w3c_home.bmp", 0, 0)
+    }
+
+    #[test]
+    fn test_draw_text() {
+        let mut screen = OledScreen32x128::new();
+        screen.draw_letter("/home/dob9601/Downloads/Minecraft.ttf", 0, 0, 8.0)
     }
 }
