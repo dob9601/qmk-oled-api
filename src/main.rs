@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use hidapi::{DeviceInfo, HidApi};
 use mpris::{Metadata, PlayerFinder};
-use qmk_nowplaying::data::OledScreen32x128;
+use qmk_nowplaying::screen::OledScreen32x128;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -48,10 +48,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let device = hid_api.open_path(&device_path).unwrap();
     loop {
         let mut screen = OledScreen32x128::new();
-        screen.draw_text("/home/dob9601/Downloads/Minecraft.ttf", "yeet", 0, 0, 14.0);
-        //for i in 0..128 {
-            //screen.draw_pixel(row, i, true);
-        //}
+        screen.draw_image("assets/bitmaps/test_square.bmp", 0, 0);
 
         row += 1;
         if row == 32 { row = 0 }
