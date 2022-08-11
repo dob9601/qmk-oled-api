@@ -1,5 +1,5 @@
 [package]
-name = "qmk_nowplaying"
+name = "qmk-oled-api"
 version = "0.1.0-alpha.1"
 description = "A HID-wrapper API for QMK keyboards designed to make it significantly easier to draw to OLED screens remotely"
 license = "MIT"
