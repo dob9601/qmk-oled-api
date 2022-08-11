@@ -48,7 +48,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let device = hid_api.open_path(&device_path).unwrap();
     loop {
         let mut screen = OledScreen32x128::new();
-        screen.draw_image("assets/bitmaps/test_square.bmp", 0, 0);
+        screen.draw_image("/home/dob9601/Documents/Untitled.png", 0, 0);
 
         row += 1;
         if row == 32 { row = 0 }

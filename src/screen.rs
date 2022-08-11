@@ -60,6 +60,7 @@ impl OledScreen32x128 {
         dither(image, &BiLevel);
 
         let image_width = image.width();
+        let image_height = image.height();
 
         for (index, pixel) in image.pixels().enumerate() {
             let row = index / image_width as usize;
@@ -67,7 +68,7 @@ impl OledScreen32x128 {
 
             let enabled = pixel.0[0] == 255;
 
-            self.set_pixel(x + row, y + col, enabled)
+            self.set_pixel(x + col, y + image_height as usize - row, enabled)
         }
     }
 
