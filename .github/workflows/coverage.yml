@@ -15,7 +15,7 @@ jobs:
       - name:                   Install libdbus
         run: |
           apt update
-          apt install -y libdbus-1-dev pkg-config
+          apt install -y libdbus-1-dev pkg-config libudev-dev
 
       - name:                   Generate code coverage
         run: |
