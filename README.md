@@ -64,5 +64,5 @@ bool oled_task_user(void) {
 | ---------------       | :---------: |
 | Image rendering       |     ✅      |
 | Basic shape rendering |     ✅      |
-| Text rendering        |     ⌛      |
+| Text rendering        |     ✅      |
 
