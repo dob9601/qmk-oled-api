@@ -219,7 +219,7 @@ mod tests {
     #[test]
     fn test_draw_image() {
         let mut screen = OledScreen32x128::new();
-        screen.draw_image("../assets/bitmaps/test_square.bmp", 0, 0);
+        screen.draw_image("assets/bitmaps/test_square.bmp", 0, 0);
     }
 
     #[test]
