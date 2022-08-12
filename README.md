@@ -10,7 +10,7 @@ This crate provides an API for drawing to the OLED screen on your QMK keyboard, 
 
 Below are some projects that have been built on top of this API:
 
-- qmk-nowplaying [TBC]
+- [qmk-nowplaying](https://github.com/dob9601/qmk-nowplaying)
 
 ## Client Snippet
 
