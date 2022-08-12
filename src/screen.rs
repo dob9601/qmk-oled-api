@@ -4,11 +4,11 @@ use std::path::Path;
 
 use fontdue::Font;
 use hidapi::{HidDevice, HidError};
-use image::imageops::{dither, BiLevel};
+use image::imageops::{dither, BiLevel, resize, FilterType};
 use itertools::Itertools;
 
 use crate::data::{DataPacket, PAYLOAD_SIZE};
-use crate::utils::set_bit_at_index;
+use crate::utils::{set_bit_at_index, get_bit_at_index};
 
 pub struct OledScreen32x128 {
     data: [[u8; 128]; 4],
@@ -53,11 +53,17 @@ impl OledScreen32x128 {
             .collect()
     }
 
-    pub fn draw_image<P: AsRef<Path>>(&mut self, bitmap_file: P, x: usize, y: usize) {
-        let image = image::open(bitmap_file).unwrap();
+    pub fn draw_image<P: AsRef<Path>>(&mut self, bitmap_file: P, x: usize, y: usize, scale: bool) {
+        let mut image = image::open(bitmap_file).unwrap();
+        if scale {
+            // TODO: Find a better way of specifying canvas size
+            image = image.resize(32, 128, FilterType::Lanczos3);
+        }
+
         let mut image = image.grayscale();
         let image = image.as_mut_luma8().unwrap();
         dither(image, &BiLevel);
+
 
         let image_width = image.width();
         let image_height = image.height();
@@ -147,10 +153,11 @@ impl OledScreen32x128 {
     }
 
     pub fn get_pixel(&self, x: usize, y: usize) -> bool {
-        let target_byte = x / 8;
-        let target_bit: u8 = 7 - ((x % 8) as u8);
-        self.data[target_byte][y] == 1
+        let byte_index = x / 8;
+        let bit_index: u8 = 7 - ((x % 8) as u8);
 
+        let byte = self.data[byte_index][y];
+        get_bit_at_index(byte, bit_index)
     }
 
     /// Underlying function for drawing to the canvas, if provided coordinates are out of range,
@@ -185,41 +192,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_enable_bit_at_index() {
-        let byte = 0b00000000;
-
-        let output = set_bit_at_index(byte, 3, true);
-        assert_eq!(output, 0b00010000)
-    }
-
-    #[test]
-    fn test_disable_bit_at_index() {
-        let byte = 0b11111111;
-
-        let output = set_bit_at_index(byte, 3, false);
-        assert_eq!(output, 0b11101111)
-    }
-
-    #[test]
     fn test_display_oled_screen() {
         let mut screen = OledScreen32x128::new();
         for i in 0..128 {
             screen.set_pixel(0, i, true);
             screen.set_pixel(31, i, true);
         }
-        println!("{screen}");
+        // FIXME: ASSERT
     }
 
     #[test]
     fn test_to_packets() {
         let screen = OledScreen32x128::new();
         screen.to_packets();
+        // FIXME: ASSERT
     }
 
     #[test]
     fn test_draw_image() {
         let mut screen = OledScreen32x128::new();
-        screen.draw_image("assets/bitmaps/test_square.bmp", 0, 0);
+        screen.draw_image("assets/bitmaps/test_square.bmp", 0, 0, false);
+        // FIXME: ASSERT
     }
 
     #[test]

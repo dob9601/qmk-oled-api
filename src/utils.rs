@@ -1,4 +1,4 @@
-fn get_bit_at_index(byte: u8, bit_index: u8) -> bool {
+pub fn get_bit_at_index(byte: u8, bit_index: u8) -> bool {
     let mask = 0b10000000 >> bit_index;
 
     mask & byte != 0
@@ -20,11 +20,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_set_bit_at_index() {
+    fn test_set_bit_at_index_enable() {
         let input = 0b00000000;
         let actual = set_bit_at_index(input, 3, true);
 
         assert_eq!(actual, 0b00010000)
+    }
+
+    #[test]
+    fn test_set_bit_at_index_disable() {
+        let byte = 0b11111111;
+
+        let output = set_bit_at_index(byte, 3, false);
+        assert_eq!(output, 0b11101111)
     }
 
     #[test]
