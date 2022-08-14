@@ -39,6 +39,21 @@ impl OledScreen32x128 {
         })
     }
 
+    pub fn from_id(vid: u16, pid: u16, usage_page: u16) -> Result<Self, HidError> {
+        let api = HidApi::new()?;
+
+        let device_info = api.device_list().find(|dev| dev.vendor_id() == vid && dev.product_id() == pid && dev.usage_page() == usage_page);
+        if let Some(device_info) = device_info {
+            let device = device_info.open_device(&api)?;
+            Ok(Self {
+                data: [[0; 128]; 4],
+                device: Box::new(device),
+            })
+        } else {
+            Err(HidError::HidApiError { message: "Could not find specified device".into() })
+        }
+    }
+
     pub fn from_device(device: impl HidAdapter + 'static) -> Result<Self, HidError> {
         Ok(Self {
             data: [[0; 128]; 4],
