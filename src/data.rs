@@ -1,9 +1,19 @@
 use hidapi::{HidDevice, HidError};
 
+pub trait HidAdapter {
+    fn write(&self, data: &[u8]) -> Result<usize, HidError>;
+}
+
+impl HidAdapter for HidDevice {
+    fn write(&self, data: &[u8]) -> Result<usize, HidError> {
+        self.write(data)
+    }
+}
+
 /// The number of bytes in a payload. Typically this is 32.
 pub const PAYLOAD_SIZE: usize = 32;
 
-pub struct DataPacket {
+pub(crate) struct DataPacket {
     index: u8,
     payload: [u8; PAYLOAD_SIZE - 2],
 }
@@ -15,7 +25,7 @@ impl DataPacket {
         bytes
     }
 
-    pub fn send(&self, device: &HidDevice) -> Result<(), HidError> {
+    pub fn send(&self, device: &dyn HidAdapter) -> Result<(), HidError> {
         let bytes = self.to_bytes();
 
         device.write(&bytes)?;

@@ -1,17 +1,19 @@
+use std::ffi::CStr;
 use std::fmt::Display;
 use std::fs;
 use std::path::Path;
 
 use fontdue::Font;
-use hidapi::{HidDevice, HidError};
-use image::imageops::{dither, BiLevel, resize, FilterType};
+use hidapi::{HidApi, HidError};
+use image::imageops::{dither, BiLevel, FilterType};
 use itertools::Itertools;
 
-use crate::data::{DataPacket, PAYLOAD_SIZE};
-use crate::utils::{set_bit_at_index, get_bit_at_index};
+use crate::data::{DataPacket, HidAdapter, PAYLOAD_SIZE};
+use crate::utils::{get_bit_at_index, set_bit_at_index};
 
 pub struct OledScreen32x128 {
     data: [[u8; 128]; 4],
+    device: Box<dyn HidAdapter>,
 }
 
 impl Display for OledScreen32x128 {
@@ -28,13 +30,23 @@ impl Display for OledScreen32x128 {
 }
 
 impl OledScreen32x128 {
-    pub fn new() -> Self {
-        Self {
+    pub fn from_path(device_path: &CStr) -> Result<Self, HidError> {
+        let api = HidApi::new()?;
+        let device = api.open_path(device_path)?;
+        Ok(Self {
             data: [[0; 128]; 4],
-        }
+            device: Box::new(device),
+        })
     }
 
-    pub fn to_packets(&self) -> Vec<DataPacket> {
+    pub fn from_device(device: impl HidAdapter + 'static) -> Result<Self, HidError> {
+        Ok(Self {
+            data: [[0; 128]; 4],
+            device: Box::new(device),
+        })
+    }
+
+    pub(crate) fn to_packets(&self) -> Vec<DataPacket> {
         self.data
             .iter()
             .flatten()
@@ -63,7 +75,6 @@ impl OledScreen32x128 {
         let mut image = image.grayscale();
         let image = image.as_mut_luma8().unwrap();
         dither(image, &BiLevel);
-
 
         let image_width = image.width();
         let image_height = image.height();
@@ -119,11 +130,11 @@ impl OledScreen32x128 {
         }
     }
 
-    pub fn send(&self, device: &HidDevice) -> Result<(), HidError> {
+    pub fn send(&self) -> Result<(), HidError> {
         let packets = self.to_packets();
 
         for packet in packets {
-            packet.send(device)?;
+            packet.send(self.device.as_ref())?;
         }
 
         Ok(())
@@ -181,19 +192,24 @@ impl OledScreen32x128 {
     }
 }
 
-impl Default for OledScreen32x128 {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    struct MockHidDevice;
+
+    impl HidAdapter for MockHidDevice {
+        fn write(&self, data: &[u8]) -> Result<usize, HidError> {
+            println!("Writing data {data:?}");
+            Ok(1)
+        }
+    }
+
+    const MOCK_DEVICE: MockHidDevice = MockHidDevice;
+
     #[test]
     fn test_display_oled_screen() {
-        let mut screen = OledScreen32x128::new();
+        let mut screen = OledScreen32x128::from_device(MOCK_DEVICE).unwrap();
         for i in 0..128 {
             screen.set_pixel(0, i, true);
             screen.set_pixel(31, i, true);
@@ -203,21 +219,21 @@ mod tests {
 
     #[test]
     fn test_to_packets() {
-        let screen = OledScreen32x128::new();
+        let screen = OledScreen32x128::from_device(MOCK_DEVICE).unwrap();
         screen.to_packets();
         // FIXME: ASSERT
     }
 
     #[test]
     fn test_draw_image() {
-        let mut screen = OledScreen32x128::new();
+        let mut screen = OledScreen32x128::from_device(MOCK_DEVICE).unwrap();
         screen.draw_image("assets/bitmaps/test_square.bmp", 0, 0, false);
         // FIXME: ASSERT
     }
 
     #[test]
     fn test_draw_text() {
-        let mut screen = OledScreen32x128::new();
+        let mut screen = OledScreen32x128::from_device(MOCK_DEVICE).unwrap();
         screen.draw_text("Hey", 0, 0, 8.0, None);
 
         assert_eq!(

@@ -14,7 +14,6 @@ pub fn set_bit_at_index(byte: u8, bit_index: u8, enabled: bool) -> u8 {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
