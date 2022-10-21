@@ -5,6 +5,7 @@ use std::path::Path;
 
 use fontdue::Font;
 use hidapi::{HidApi, HidError};
+use image::DynamicImage;
 use image::imageops::{dither, BiLevel, FilterType};
 use itertools::Itertools;
 
@@ -80,8 +81,12 @@ impl OledScreen32x128 {
             .collect()
     }
 
-    pub fn draw_image<P: AsRef<Path>>(&mut self, bitmap_file: P, x: usize, y: usize, scale: bool) {
-        let mut image = image::open(bitmap_file).unwrap();
+    pub fn draw_image_file<P: AsRef<Path>>(&mut self, image_path: P, x: usize, y: usize, scale: bool) {
+        let image = image::open(image_path).unwrap();
+        self.draw_image(image, x, y, scale)
+    }
+
+    pub fn draw_image(&mut self, mut image: DynamicImage, x: usize, y: usize, scale: bool) {
         if scale {
             // TODO: Find a better way of specifying canvas size
             image = image.resize(32, 128, FilterType::Lanczos3);
@@ -240,9 +245,9 @@ mod tests {
     }
 
     #[test]
-    fn test_draw_image() {
+    fn test_draw_image_file() {
         let mut screen = OledScreen32x128::from_device(MOCK_DEVICE).unwrap();
-        screen.draw_image("assets/bitmaps/test_square.bmp", 0, 0, false);
+        screen.draw_image_file("assets/bitmaps/test_square.bmp", 0, 0, false);
         // FIXME: ASSERT
     }
 
