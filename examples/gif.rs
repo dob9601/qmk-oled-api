@@ -13,11 +13,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let device_path =
         CString::new(env::var("DEVICE_PATH").expect("Missing required env var")).unwrap();
 
-    let mut screen = OledScreen32x128::from_path(&device_path)?;
-
-    let gif_file = File::open("/foo/bar")?;
+    let gif_file = File::open("bird.gif")?;
     let gif_decoder = GifDecoder::new(gif_file)?; // FIXME: Replace with real path
     let frames = gif_decoder.into_frames().collect_frames()?;
+
+    let mut screen = OledScreen32x128::from_path(&device_path)?;
 
     loop {
         frames.iter().for_each(|frame| {
