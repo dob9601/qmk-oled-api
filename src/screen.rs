@@ -5,8 +5,8 @@ use std::path::Path;
 
 use fontdue::Font;
 use hidapi::{HidApi, HidError};
-use image::DynamicImage;
 use image::imageops::{dither, BiLevel, FilterType};
+use image::DynamicImage;
 use itertools::Itertools;
 
 use crate::data::{DataPacket, HidAdapter, PAYLOAD_SIZE};
@@ -43,7 +43,9 @@ impl OledScreen32x128 {
     pub fn from_id(vid: u16, pid: u16, usage_page: u16) -> Result<Self, HidError> {
         let api = HidApi::new()?;
 
-        let device_info = api.device_list().find(|dev| dev.vendor_id() == vid && dev.product_id() == pid && dev.usage_page() == usage_page);
+        let device_info = api.device_list().find(|dev| {
+            dev.vendor_id() == vid && dev.product_id() == pid && dev.usage_page() == usage_page
+        });
         if let Some(device_info) = device_info {
             let device = device_info.open_device(&api)?;
             Ok(Self {
@@ -51,7 +53,9 @@ impl OledScreen32x128 {
                 device: Box::new(device),
             })
         } else {
-            Err(HidError::HidApiError { message: "Could not find specified device".into() })
+            Err(HidError::HidApiError {
+                message: "Could not find specified device".into(),
+            })
         }
     }
 
@@ -81,7 +85,13 @@ impl OledScreen32x128 {
             .collect()
     }
 
-    pub fn draw_image_file<P: AsRef<Path>>(&mut self, image_path: P, x: usize, y: usize, scale: bool) {
+    pub fn draw_image_file<P: AsRef<Path>>(
+        &mut self,
+        image_path: P,
+        x: usize,
+        y: usize,
+        scale: bool,
+    ) {
         let image = image::open(image_path).unwrap();
         self.draw_image(image, x, y, scale)
     }
@@ -92,9 +102,8 @@ impl OledScreen32x128 {
             image = image.resize(32, 128, FilterType::Lanczos3);
         }
 
-        let mut image = image.grayscale();
-        let image = image.as_mut_luma8().unwrap();
-        dither(image, &BiLevel);
+        let mut image = image.grayscale().into_luma8();
+        dither(&mut image, &BiLevel);
 
         let image_width = image.width();
         let image_height = image.height();
