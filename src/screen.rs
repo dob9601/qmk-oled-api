@@ -6,10 +6,17 @@ use std::path::Path;
 use fontdue::Font;
 use hidapi::{HidApi, HidError};
 use image::imageops::{dither, BiLevel, FilterType};
+use image::DynamicImage;
 use itertools::Itertools;
 
 use crate::data::{DataPacket, HidAdapter, PAYLOAD_SIZE};
 use crate::utils::{get_bit_at_index, set_bit_at_index};
+
+pub enum ImageSizing {
+    Contain,
+    Cover,
+    Original,
+}
 
 pub struct OledScreen32x128 {
     data: [[u8; 128]; 4],
@@ -42,7 +49,9 @@ impl OledScreen32x128 {
     pub fn from_id(vid: u16, pid: u16, usage_page: u16) -> Result<Self, HidError> {
         let api = HidApi::new()?;
 
-        let device_info = api.device_list().find(|dev| dev.vendor_id() == vid && dev.product_id() == pid && dev.usage_page() == usage_page);
+        let device_info = api.device_list().find(|dev| {
+            dev.vendor_id() == vid && dev.product_id() == pid && dev.usage_page() == usage_page
+        });
         if let Some(device_info) = device_info {
             let device = device_info.open_device(&api)?;
             Ok(Self {
@@ -50,7 +59,9 @@ impl OledScreen32x128 {
                 device: Box::new(device),
             })
         } else {
-            Err(HidError::HidApiError { message: "Could not find specified device".into() })
+            Err(HidError::HidApiError {
+                message: "Could not find specified device".into(),
+            })
         }
     }
 
@@ -80,16 +91,43 @@ impl OledScreen32x128 {
             .collect()
     }
 
-    pub fn draw_image<P: AsRef<Path>>(&mut self, bitmap_file: P, x: usize, y: usize, scale: bool) {
-        let mut image = image::open(bitmap_file).unwrap();
-        if scale {
-            // TODO: Find a better way of specifying canvas size
-            image = image.resize(32, 128, FilterType::Lanczos3);
-        }
+    pub fn draw_image_file<P: AsRef<Path>>(
+        &mut self,
+        image_path: P,
+        x: usize,
+        y: usize,
+        sizing: &ImageSizing,
+    ) {
+        let image = image::open(image_path).unwrap();
+        self.draw_image(image, x, y, sizing)
+    }
 
-        let mut image = image.grayscale();
-        let image = image.as_mut_luma8().unwrap();
-        dither(image, &BiLevel);
+    pub fn draw_image(
+        &mut self,
+        mut image: DynamicImage,
+        x: usize,
+        y: usize,
+        sizing: &ImageSizing,
+    ) {
+        match sizing {
+            ImageSizing::Contain => image = image.resize(32, 128, FilterType::Lanczos3),
+            ImageSizing::Cover => {
+                let scaling = f32::max( // FIXME: This scaling is scuffed
+                    32_f32 / image.width() as f32,
+                    128_f32 / image.height() as f32,
+                );
+
+                image = image.resize(
+                    (image.width() as f32 * scaling) as u32,
+                    (image.height() as f32 * scaling) as u32,
+                    FilterType::Lanczos3,
+                );
+            }
+            ImageSizing::Original => (),
+        };
+
+        let mut image = image.grayscale().into_luma8();
+        dither(&mut image, &BiLevel);
 
         let image_width = image.width();
         let image_height = image.height();
@@ -240,9 +278,9 @@ mod tests {
     }
 
     #[test]
-    fn test_draw_image() {
+    fn test_draw_image_file() {
         let mut screen = OledScreen32x128::from_device(MOCK_DEVICE).unwrap();
-        screen.draw_image("assets/bitmaps/test_square.bmp", 0, 0, false);
+        screen.draw_image_file("assets/bitmaps/test_square.bmp", 0, 0, &ImageSizing::Contain);
         // FIXME: ASSERT
     }
 
