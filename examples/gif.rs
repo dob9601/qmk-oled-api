@@ -7,7 +7,7 @@ use std::thread::sleep;
 use image::codecs::gif::GifDecoder;
 use image::imageops::{dither, BiLevel};
 use image::{AnimationDecoder, DynamicImage};
-use qmk_oled_api::screen::{OledScreen32x128, ImageSizing};
+use qmk_oled_api::screen::OledScreen32x128;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let device_path =
@@ -25,7 +25,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             let image = frame.buffer().clone();
             let dynamic = DynamicImage::ImageRgba8(image);
             dither(&mut dynamic.grayscale().into_luma8(), &BiLevel);
-            screen.draw_image(dynamic, 0, 0, &ImageSizing::Cover);
+            screen.draw_image(dynamic, 0, 0, true);
             screen.send().unwrap();
             sleep(frame.delay().into());
         });
