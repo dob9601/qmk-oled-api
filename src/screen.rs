@@ -112,12 +112,12 @@ impl OledScreen32x128 {
         match sizing {
             ImageSizing::Contain => image = image.resize(32, 128, FilterType::Lanczos3),
             ImageSizing::Cover => {
-                let scaling = f32::max(
+                let scaling = f32::max( // FIXME: This scaling is scuffed
                     32_f32 / image.width() as f32,
                     128_f32 / image.height() as f32,
                 );
 
-                image.resize(
+                image = image.resize(
                     (image.width() as f32 * scaling) as u32,
                     (image.height() as f32 * scaling) as u32,
                     FilterType::Lanczos3,
