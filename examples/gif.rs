@@ -20,14 +20,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut screen = OledScreen::from_path(&device_path, 32, 128)?;
 
     loop {
-        frames.iter().step_by(4).for_each(|frame| {
+        frames.iter().for_each(|frame| {
             let frame = frame;
             let image = frame.buffer().clone();
             let dynamic = DynamicImage::ImageRgba8(image);
             dither(&mut dynamic.grayscale().into_luma8(), &BiLevel);
             screen.draw_image(dynamic, -32, 0, &ImageSizing::Cover);
             screen.send().unwrap();
-            sleep(frame.delay().into());
         });
     }
 }
