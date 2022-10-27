@@ -18,16 +18,20 @@ pub enum ImageSizing {
     Original,
 }
 
-pub struct OledScreen32x128 {
-    data: [[u8; 128]; 4],
+pub struct OledScreen {
+    width: usize,
+    height: usize,
+    data: Vec<u8>,
     device: Box<dyn HidAdapter>,
 }
 
-impl Display for OledScreen32x128 {
+impl Display for OledScreen {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let string = self
             .data
             .iter()
+            .chunks(self.width / 8)
+            .into_iter()
             .map(|row| row.map(|byte| format!("{byte:08b}")).join(""))
             .join("\n")
             .replace('0', "░")
@@ -36,17 +40,25 @@ impl Display for OledScreen32x128 {
     }
 }
 
-impl OledScreen32x128 {
-    pub fn from_path(device_path: &CStr) -> Result<Self, HidError> {
+impl OledScreen {
+    pub fn from_path(device_path: &CStr, width: usize, height: usize) -> Result<Self, HidError> {
         let api = HidApi::new()?;
         let device = api.open_path(device_path)?;
         Ok(Self {
-            data: [[0; 128]; 4],
+            data: vec![0; (width * height) / 8],
             device: Box::new(device),
+            width,
+            height,
         })
     }
 
-    pub fn from_id(vid: u16, pid: u16, usage_page: u16) -> Result<Self, HidError> {
+    pub fn from_id(
+        vid: u16,
+        pid: u16,
+        usage_page: u16,
+        width: usize,
+        height: usize,
+    ) -> Result<Self, HidError> {
         let api = HidApi::new()?;
 
         let device_info = api.device_list().find(|dev| {
@@ -55,8 +67,10 @@ impl OledScreen32x128 {
         if let Some(device_info) = device_info {
             let device = device_info.open_device(&api)?;
             Ok(Self {
-                data: [[0; 128]; 4],
+                data: vec![0; (width * height) / 8],
                 device: Box::new(device),
+                width,
+                height,
             })
         } else {
             Err(HidError::HidApiError {
@@ -65,17 +79,22 @@ impl OledScreen32x128 {
         }
     }
 
-    pub fn from_device(device: impl HidAdapter + 'static) -> Result<Self, HidError> {
+    pub fn from_device(
+        device: impl HidAdapter + 'static,
+        width: usize,
+        height: usize,
+    ) -> Result<Self, HidError> {
         Ok(Self {
-            data: [[0; 128]; 4],
+            data: vec![0; (width * height) / 8],
             device: Box::new(device),
+            width,
+            height,
         })
     }
 
     pub(crate) fn to_packets(&self) -> Vec<DataPacket> {
         self.data
             .iter()
-            .flatten()
             .chunks(PAYLOAD_SIZE - 2)
             .into_iter()
             .map(|chunk| {
@@ -94,8 +113,8 @@ impl OledScreen32x128 {
     pub fn draw_image_file<P: AsRef<Path>>(
         &mut self,
         image_path: P,
-        x: usize,
-        y: usize,
+        x: isize,
+        y: isize,
         sizing: &ImageSizing,
     ) {
         let image = image::open(image_path).unwrap();
@@ -105,14 +124,15 @@ impl OledScreen32x128 {
     pub fn draw_image(
         &mut self,
         mut image: DynamicImage,
-        x: usize,
-        y: usize,
+        x: isize,
+        y: isize,
         sizing: &ImageSizing,
     ) {
         match sizing {
             ImageSizing::Contain => image = image.resize(32, 128, FilterType::Lanczos3),
             ImageSizing::Cover => {
-                let scaling = f32::max( // FIXME: This scaling is scuffed
+                let scaling = f32::max(
+                    // FIXME: This scaling is scuffed
                     32_f32 / image.width() as f32,
                     128_f32 / image.height() as f32,
                 );
@@ -133,20 +153,22 @@ impl OledScreen32x128 {
         let image_height = image.height();
 
         for (index, pixel) in image.pixels().enumerate() {
-            let row = index / image_width as usize;
-            let col = index % image_width as usize;
+            let index = index as isize;
+
+            let row = index / image_width as isize;
+            let col = index % image_width as isize;
 
             let enabled = pixel.0[0] == 255;
 
-            self.set_pixel(x + col, y + image_height as usize - row, enabled)
+            self.set_pixel(x + col, y + image_height as isize - row, enabled)
         }
     }
 
     pub fn draw_text(
         &mut self,
         text: &str,
-        x: usize,
-        y: usize,
+        x: isize,
+        y: isize,
         size: f32,
         font_path: Option<&str>,
     ) {
@@ -164,7 +186,7 @@ impl OledScreen32x128 {
         let mut x_cursor = x;
 
         for letter in text.chars() {
-            let width = font.metrics(letter, size).width;
+            let width = font.metrics(letter, size).width as isize;
             self.draw_letter(letter, x_cursor, y, size, &font);
 
             // FIXME: Use horizontal kerning as opposed to abstract value of "2"
@@ -172,12 +194,17 @@ impl OledScreen32x128 {
         }
     }
 
-    fn draw_letter(&mut self, letter: char, x: usize, y: usize, size: f32, font: &Font) {
+    fn draw_letter(&mut self, letter: char, x: isize, y: isize, size: f32, font: &Font) {
         let (metrics, bitmap) = font.rasterize(letter, size);
 
         for (index, byte) in bitmap.into_iter().enumerate() {
-            let col = x + (index % metrics.width);
-            let row = y + metrics.height - (index / metrics.width);
+            let index = index as isize;
+
+            let width = metrics.width as isize;
+            let height = metrics.height as isize;
+
+            let col = x + (index % width);
+            let row = y + height - (index / width);
             let enabled = (byte as f32 / 255.0).round() as i32 == 1;
             self.set_pixel(col, row, enabled)
         }
@@ -194,19 +221,19 @@ impl OledScreen32x128 {
     }
 
     pub fn clear(&mut self) {
-        self.data = [[0; 128]; 4];
+        self.data = vec![0; (self.width * self.height) / 8_usize];
     }
 
     pub fn fill_all(&mut self) {
-        self.data = [[1; 128]; 4];
+        self.data = vec![1; (self.width * self.height) / 8_usize];
     }
 
     pub fn paint_region(
         &mut self,
-        min_x: usize,
-        min_y: usize,
-        max_x: usize,
-        max_y: usize,
+        min_x: isize,
+        min_y: isize,
+        max_x: isize,
+        max_y: isize,
         enabled: bool,
     ) {
         for x in min_x..max_x {
@@ -217,10 +244,10 @@ impl OledScreen32x128 {
     }
 
     pub fn get_pixel(&self, x: usize, y: usize) -> bool {
-        let byte_index = x / 8;
+        let byte_index = (x + y * self.width) / 8;
         let bit_index: u8 = 7 - ((x % 8) as u8);
 
-        let byte = self.data[byte_index][y];
+        let byte = self.data[byte_index];
         get_bit_at_index(byte, bit_index)
     }
 
@@ -231,17 +258,19 @@ impl OledScreen32x128 {
     /// * `x` - The x coordinate of the pixel to set
     /// * `y` - The y coordinate of the pixel to set
     /// * `enabled` - Whether to set the pixel to an enabled or disabled state (on/off)
-    pub fn set_pixel(&mut self, x: usize, y: usize, enabled: bool) {
-        if x > 31 || y > 127 {
+    pub fn set_pixel(&mut self, x: isize, y: isize, enabled: bool) {
+        if x >= self.width as isize || y >= self.height as isize || x < 0 || y < 0 {
             // If a pixel is rendered outside of the canvas, fail silently
             return;
         }
 
-        let target_byte = x / 8;
+        let x = x as usize;
+        let y = y as usize;
+
+        let target_byte = (x / 8) * self.height + y;
         let target_bit: u8 = 7 - ((x % 8) as u8);
 
-        self.data[target_byte][y] =
-            set_bit_at_index(self.data[target_byte][y], target_bit, enabled);
+        self.data[target_byte] = set_bit_at_index(self.data[target_byte], target_bit, enabled);
     }
 }
 
@@ -262,65 +291,64 @@ mod tests {
 
     #[test]
     fn test_display_oled_screen() {
-        let mut screen = OledScreen32x128::from_device(MOCK_DEVICE).unwrap();
+        let mut screen = OledScreen::from_device(MOCK_DEVICE, 32, 128).unwrap();
         for i in 0..128 {
             screen.set_pixel(0, i, true);
             screen.set_pixel(31, i, true);
         }
         // FIXME: ASSERT
+        println!("{screen}")
     }
 
     #[test]
     fn test_to_packets() {
-        let screen = OledScreen32x128::from_device(MOCK_DEVICE).unwrap();
+        let screen = OledScreen::from_device(MOCK_DEVICE, 32, 128).unwrap();
         screen.to_packets();
         // FIXME: ASSERT
     }
 
     #[test]
     fn test_draw_image_file() {
-        let mut screen = OledScreen32x128::from_device(MOCK_DEVICE).unwrap();
-        screen.draw_image_file("assets/bitmaps/test_square.bmp", 0, 0, &ImageSizing::Contain);
+        let mut screen = OledScreen::from_device(MOCK_DEVICE, 32, 128).unwrap();
+        screen.draw_image_file(
+            "assets/bitmaps/test_square.bmp",
+            0,
+            0,
+            &ImageSizing::Contain,
+        );
+        println!("{screen}")
         // FIXME: ASSERT
     }
 
     #[test]
     fn test_draw_text() {
-        let mut screen = OledScreen32x128::from_device(MOCK_DEVICE).unwrap();
+        let mut screen = OledScreen::from_device(MOCK_DEVICE, 32, 128).unwrap();
         screen.draw_text("Hey", 0, 0, 8.0, None);
+
+        println!("{screen}");
 
         assert_eq!(
             screen.data,
-            [
-                [
-                    0, 136, 8, 138, 138, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-                ],
-                [
-                    0, 65, 128, 227, 129, 128, 128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0
-                ],
-                [
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-                ],
-                [
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-                ]
+            vec![
+                0, 136, 8, 138, 138, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 65, 128, 227, 129, 128,
+                128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
             ]
         );
     }

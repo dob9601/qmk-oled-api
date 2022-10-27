@@ -17,3 +17,6 @@ hidapi = { version = "1.4.1", default-features = false, features = ["linux-stati
 bincode = "1.3.3"
 serde = { version = "1.0.141", features = ["derive"] }
 fontdue = "0.7.2"
+
+[dev-dependencies]
+pretty_assertions = "1.3.0"
