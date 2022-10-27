@@ -12,6 +12,9 @@ Below are some projects that have been built on top of this API:
 
 - [qmk-nowplaying](https://github.com/dob9601/qmk-nowplaying)
 
+## Gif Example
+https://user-images.githubusercontent.com/24723950/198413942-76ffc483-ebfd-46a0-91fa-2411973d8280.mp4
+
 ## Client Snippet
 
 Below is a snippet of config you can use to turn your keyboard into a client:
