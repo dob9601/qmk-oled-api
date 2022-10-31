@@ -22,6 +22,7 @@ pub struct OledScreen {
     width: usize,
     height: usize,
     data: Vec<u8>,
+    _prev_packets: Option<Vec<DataPacket>>,
     device: Box<dyn HidAdapter>,
 }
 
@@ -49,6 +50,7 @@ impl OledScreen {
             device: Box::new(device),
             width,
             height,
+            _prev_packets: None,
         })
     }
 
@@ -71,6 +73,7 @@ impl OledScreen {
                 device: Box::new(device),
                 width,
                 height,
+                _prev_packets: None,
             })
         } else {
             Err(HidError::HidApiError {
@@ -80,7 +83,7 @@ impl OledScreen {
     }
 
     pub fn from_device(
-        device: impl HidAdapter + 'static,
+        device: impl HidAdapter + 'static + Clone,
         width: usize,
         height: usize,
     ) -> Result<Self, HidError> {
@@ -89,6 +92,7 @@ impl OledScreen {
             device: Box::new(device),
             width,
             height,
+            _prev_packets: None,
         })
     }
 
@@ -132,7 +136,6 @@ impl OledScreen {
             ImageSizing::Contain => image = image.resize(32, 128, FilterType::Lanczos3),
             ImageSizing::Cover => {
                 let scaling = f32::max(
-                    // FIXME: This scaling is scuffed
                     32_f32 / image.width() as f32,
                     128_f32 / image.height() as f32,
                 );
@@ -210,8 +213,15 @@ impl OledScreen {
         }
     }
 
-    pub fn send(&self) -> Result<(), HidError> {
-        let packets = self.to_packets();
+    pub fn send(&mut self) -> Result<(), HidError> {
+        let mut packets = self.to_packets();
+
+        // Filter out packets for regions of the screen which haven't changed since last time
+        if let Some(prev_packets) = &self._prev_packets {
+            packets.retain(|packet| !prev_packets.contains(packet))
+        };
+
+        self._prev_packets = Some(self.to_packets());
 
         for packet in packets {
             packet.send(self.device.as_ref())?;
@@ -276,22 +286,38 @@ impl OledScreen {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
+
     use super::*;
 
-    struct MockHidDevice;
+    #[derive(Clone)]
+    struct MockHidDevice {
+        pub write_log: RefCell<Vec<Vec<u8>>>,
+    }
 
-    impl HidAdapter for MockHidDevice {
-        fn write(&self, data: &[u8]) -> Result<usize, HidError> {
-            println!("Writing data {data:?}");
-            Ok(1)
+    impl MockHidDevice {
+        pub const fn new() -> Self {
+            MockHidDevice {
+                write_log: RefCell::new(vec![]),
+            }
         }
     }
 
-    const MOCK_DEVICE: MockHidDevice = MockHidDevice;
+    impl HidAdapter for MockHidDevice {
+        fn write(&self, data: &[u8]) -> Result<usize, HidError> {
+            self.write_log.borrow_mut().push(data.into());
+            Ok(1)
+        }
+
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    }
 
     #[test]
     fn test_display_oled_screen() {
-        let mut screen = OledScreen::from_device(MOCK_DEVICE, 32, 128).unwrap();
+        let mock_device = MockHidDevice::new();
+        let mut screen = OledScreen::from_device(mock_device, 32, 128).unwrap();
         for i in 0..128 {
             screen.set_pixel(0, i, true);
             screen.set_pixel(31, i, true);
@@ -302,14 +328,16 @@ mod tests {
 
     #[test]
     fn test_to_packets() {
-        let screen = OledScreen::from_device(MOCK_DEVICE, 32, 128).unwrap();
+        let mock_device = MockHidDevice::new();
+        let screen = OledScreen::from_device(mock_device, 32, 128).unwrap();
         screen.to_packets();
         // FIXME: ASSERT
     }
 
     #[test]
     fn test_draw_image_file() {
-        let mut screen = OledScreen::from_device(MOCK_DEVICE, 32, 128).unwrap();
+        let mock_device = MockHidDevice::new();
+        let mut screen = OledScreen::from_device(mock_device, 32, 128).unwrap();
         screen.draw_image_file(
             "assets/bitmaps/test_square.bmp",
             0,
@@ -322,7 +350,8 @@ mod tests {
 
     #[test]
     fn test_draw_text() {
-        let mut screen = OledScreen::from_device(MOCK_DEVICE, 32, 128).unwrap();
+        let mock_device = MockHidDevice::new();
+        let mut screen = OledScreen::from_device(mock_device, 32, 128).unwrap();
         screen.draw_text("Hey", 0, 0, 8.0, None);
 
         println!("{screen}");
@@ -351,5 +380,23 @@ mod tests {
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
             ]
         );
+    }
+
+    #[test]
+    fn test_packet_filtering() {
+        let mock_device = MockHidDevice::new();
+        let mut screen = OledScreen::from_device(mock_device, 32, 128).unwrap();
+        screen.fill_all();
+        screen.send().unwrap();
+        screen.fill_all();
+        screen.send().unwrap();
+
+        let device: &MockHidDevice = screen
+            .device
+            .as_any()
+            .downcast_ref::<MockHidDevice>()
+            .unwrap();
+
+        assert_eq!(18, device.write_log.borrow().len());
     }
 }
