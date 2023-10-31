@@ -197,11 +197,10 @@ impl OledScreen {
         let mut x_cursor = x;
 
         for letter in text.chars() {
-            let width = font.metrics(letter, size).width;
+            let letter_metrics = font.metrics(letter, size);
             self.draw_letter(letter, x_cursor, y, size, &font);
 
-            // FIXME: Use horizontal kerning as opposed to abstract value of "2"
-            x_cursor += width + 2
+            x_cursor += letter_metrics.advance_width.round() as usize;
         }
     }
 
