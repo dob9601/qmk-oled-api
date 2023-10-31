@@ -42,6 +42,7 @@ impl Display for OledScreen {
 }
 
 impl OledScreen {
+    /// Load a device from a path (e.g. /dev/xyz)
     pub fn from_path(device_path: &CStr, width: usize, height: usize) -> Result<Self, HidError> {
         let api = HidApi::new()?;
         let device = api.open_path(device_path)?;
@@ -54,6 +55,7 @@ impl OledScreen {
         })
     }
 
+    /// Load a device from a USB vid (vendor ID) and pid (product ID)
     pub fn from_id(
         vid: u16,
         pid: u16,
@@ -82,6 +84,7 @@ impl OledScreen {
         }
     }
 
+    /// Load from a hidapi device
     pub fn from_device(
         device: impl HidAdapter + 'static + Clone,
         width: usize,
@@ -96,6 +99,9 @@ impl OledScreen {
         })
     }
 
+    /// Convert the current state of the screen into a vector of datapackets.
+    ///
+    /// Useful when trying to send the state of the screen to a device
     pub(crate) fn to_packets(&self) -> Vec<DataPacket> {
         self.data
             .iter()
@@ -114,6 +120,7 @@ impl OledScreen {
             .collect()
     }
 
+    /// Draw a given image on the display, loading the image from a path
     pub fn draw_image_file<P: AsRef<Path>>(
         &mut self,
         image_path: P,
@@ -125,6 +132,7 @@ impl OledScreen {
         self.draw_image(image, x, y, sizing)
     }
 
+    /// Draw a given image on the display, loading the image from an existing `DynamicImage` variable.
     pub fn draw_image(
         &mut self,
         mut image: DynamicImage,
@@ -165,6 +173,8 @@ impl OledScreen {
         }
     }
 
+    /// Draw a given string to the display with a given size. If no font is givem, the font used
+    /// will be Cozette (which is bundled with the project)
     pub fn draw_text(
         &mut self,
         text: &str,
@@ -195,7 +205,8 @@ impl OledScreen {
         }
     }
 
-    fn draw_letter(&mut self, letter: char, x: usize, y: usize, size: f32, font: &Font) {
+    /// Draw a singular letter to the display (the function you are probably looking for is `draw_text`)
+    pub fn draw_letter(&mut self, letter: char, x: usize, y: usize, size: f32, font: &Font) {
         let (metrics, bitmap) = font.rasterize(letter, size);
 
         for (index, byte) in bitmap.into_iter().enumerate() {
@@ -209,6 +220,7 @@ impl OledScreen {
         }
     }
 
+    /// Send the current state of the screen to the wrapped HID device
     pub fn send(&mut self) -> Result<(), HidError> {
         let mut packets = self.to_packets();
 
@@ -226,14 +238,17 @@ impl OledScreen {
         Ok(())
     }
 
+    /// Set all pixels on the screen to their off state
     pub fn clear(&mut self) {
         self.data = vec![0; (self.width * self.height) / 8_usize];
     }
 
+    /// Set all pixels on the screen to their on state
     pub fn fill_all(&mut self) {
         self.data = vec![1; (self.width * self.height) / 8_usize];
     }
 
+    /// Paint a square region on the screen
     pub fn paint_region(
         &mut self,
         min_x: usize,
@@ -249,6 +264,9 @@ impl OledScreen {
         }
     }
 
+    /// Get the current state of the pixel on the screen. This function does not communicate
+    /// with the underlying device and instead reads from the local version of what the screen
+    /// *should* look like at the moment
     pub fn get_pixel(&self, x: usize, y: usize) -> bool {
         let byte_index = (x + y * self.width) / 8;
         let bit_index: u8 = 7 - ((x % 8) as u8);
