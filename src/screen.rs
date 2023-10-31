@@ -117,8 +117,8 @@ impl OledScreen {
     pub fn draw_image_file<P: AsRef<Path>>(
         &mut self,
         image_path: P,
-        x: isize,
-        y: isize,
+        x: usize,
+        y: usize,
         sizing: &ImageSizing,
     ) {
         let image = image::open(image_path).unwrap();
@@ -128,8 +128,8 @@ impl OledScreen {
     pub fn draw_image(
         &mut self,
         mut image: DynamicImage,
-        x: isize,
-        y: isize,
+        x: usize,
+        y: usize,
         sizing: &ImageSizing,
     ) {
         match sizing {
@@ -156,22 +156,20 @@ impl OledScreen {
         let image_height = image.height();
 
         for (index, pixel) in image.pixels().enumerate() {
-            let index = index as isize;
-
-            let row = index / image_width as isize;
-            let col = index % image_width as isize;
+            let row = index / image_width as usize;
+            let col = index % image_width as usize;
 
             let enabled = pixel.0[0] == 255;
 
-            self.set_pixel(x + col, y + image_height as isize - row, enabled)
+            self.set_pixel(x + col, y + image_height as usize - row, enabled)
         }
     }
 
     pub fn draw_text(
         &mut self,
         text: &str,
-        x: isize,
-        y: isize,
+        x: usize,
+        y: usize,
         size: f32,
         font_path: Option<&str>,
     ) {
@@ -189,7 +187,7 @@ impl OledScreen {
         let mut x_cursor = x;
 
         for letter in text.chars() {
-            let width = font.metrics(letter, size).width as isize;
+            let width = font.metrics(letter, size).width;
             self.draw_letter(letter, x_cursor, y, size, &font);
 
             // FIXME: Use horizontal kerning as opposed to abstract value of "2"
@@ -197,14 +195,12 @@ impl OledScreen {
         }
     }
 
-    fn draw_letter(&mut self, letter: char, x: isize, y: isize, size: f32, font: &Font) {
+    fn draw_letter(&mut self, letter: char, x: usize, y: usize, size: f32, font: &Font) {
         let (metrics, bitmap) = font.rasterize(letter, size);
 
         for (index, byte) in bitmap.into_iter().enumerate() {
-            let index = index as isize;
-
-            let width = metrics.width as isize;
-            let height = metrics.height as isize;
+            let width = metrics.width;
+            let height = metrics.height;
 
             let col = x + (index % width);
             let row = y + height - (index / width);
@@ -240,10 +236,10 @@ impl OledScreen {
 
     pub fn paint_region(
         &mut self,
-        min_x: isize,
-        min_y: isize,
-        max_x: isize,
-        max_y: isize,
+        min_x: usize,
+        min_y: usize,
+        max_x: usize,
+        max_y: usize,
         enabled: bool,
     ) {
         for x in min_x..max_x {
@@ -268,8 +264,8 @@ impl OledScreen {
     /// * `x` - The x coordinate of the pixel to set
     /// * `y` - The y coordinate of the pixel to set
     /// * `enabled` - Whether to set the pixel to an enabled or disabled state (on/off)
-    pub fn set_pixel(&mut self, x: isize, y: isize, enabled: bool) {
-        if x >= self.width as isize || y >= self.height as isize || x < 0 || y < 0 {
+    pub fn set_pixel(&mut self, x: usize, y: usize, enabled: bool) {
+        if x >= self.width || y >= self.height {
             // If a pixel is rendered outside of the canvas, fail silently
             return;
         }
