@@ -335,30 +335,27 @@ mod tests {
             screen.set_pixel(0, i, true);
             screen.set_pixel(31, i, true);
         }
-        // FIXME: ASSERT
-        println!("{screen}")
     }
 
     #[test]
     fn test_to_packets() {
         let mock_device = MockHidDevice::new();
         let screen = OledScreen::from_device(mock_device, 32, 128).unwrap();
-        screen.to_packets();
-        // FIXME: ASSERT
+        let packets = screen.to_packets();
+        assert_eq!(packets.len(), 18);
     }
 
     #[test]
     fn test_draw_image_file() {
         let mock_device = MockHidDevice::new();
         let mut screen = OledScreen::from_device(mock_device, 32, 128).unwrap();
-        screen.draw_image_file(
-            "assets/bitmaps/test_square.bmp",
-            0,
-            0,
-            &ImageSizing::Contain,
-        );
-        println!("{screen}")
-        // FIXME: ASSERT
+        screen.draw_image_file("assets/bitmaps/test_square.bmp", 0, 0, &ImageSizing::Cover);
+
+        for i in 0..5 {
+            for j in 0..5 {
+                assert!(screen.get_pixel(j, i));
+            }
+        }
     }
 
     #[test]
@@ -366,8 +363,6 @@ mod tests {
         let mock_device = MockHidDevice::new();
         let mut screen = OledScreen::from_device(mock_device, 32, 128).unwrap();
         screen.draw_text("Hey", 0, 0, 8.0, None);
-
-        println!("{screen}");
 
         assert_eq!(
             screen.data,

@@ -2,12 +2,11 @@ use std::env;
 use std::error::Error;
 use std::ffi::CString;
 use std::fs::File;
-use std::thread::sleep;
 
 use image::codecs::gif::GifDecoder;
 use image::imageops::{dither, BiLevel};
 use image::{AnimationDecoder, DynamicImage};
-use qmk_oled_api::screen::{OledScreen, ImageSizing};
+use qmk_oled_api::screen::{ImageSizing, OledScreen};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let device_path =
@@ -25,7 +24,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             let image = frame.buffer().clone();
             let dynamic = DynamicImage::ImageRgba8(image);
             dither(&mut dynamic.grayscale().into_luma8(), &BiLevel);
-            screen.draw_image(dynamic, -32, 0, &ImageSizing::Cover);
+            screen.draw_image(dynamic, 0, 0, &ImageSizing::Cover);
             screen.send().unwrap();
         });
     }
