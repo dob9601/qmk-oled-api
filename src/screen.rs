@@ -190,7 +190,7 @@ impl OledScreen {
             let letter_metrics = font.metrics(letter, size);
             self.draw_letter(letter, x_cursor, y, size, &font);
 
-            x_cursor += letter_metrics.advance_width as usize;
+            x_cursor += letter_metrics.advance_width.round() as usize;
         }
     }
 
